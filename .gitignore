@@ -1,0 +1,25 @@
+# PlatformIO
+.pio/
+.pioenvs/
+.piolibdeps/
+
+# Arduino IDE build output
+build/
+*.hex
+*.elf
+
+# Host tooling
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Captured telemetry logs
+prehend_*.csv
+
+# Editor / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
