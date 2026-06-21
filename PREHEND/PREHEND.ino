@@ -11,6 +11,7 @@
    tier (see host/bp_trigger.py); EMG still gates COMMIT.
    ============================================================ */
 #include <Servo.h>
+#include <EEPROM.h>
 
 /* ---- pins ---- */
 const uint8_t PIN_EMG=A0, PIN_AUX=A1, PIN_FSR=A2;   // analog in
@@ -26,6 +27,14 @@ const uint16_t FS_HZ = 1000;
 const uint32_t SAMPLE_US = 1000000UL / FS_HZ;
 const float    DT = 1.0f / FS_HZ;
 uint32_t lastSampleUs = 0;
+
+/* ---- EEPROM magic byte ---- */
+const uint8_t EEPROM_MAGIC = 0xA7;     // version tag; change to invalidate old saves
+const int     EEPROM_ADDR  = 0;        // start address
+
+/* ---- non-blocking serial command buffer ---- */
+char   serialBuf[24];
+uint8_t serialIdx = 0;
 
 /* ---- ADC resolution: UNO R4 is 14-bit; classic Uno is 10-bit ---- */
 #if defined(ARDUINO_UNOR4_MINIMA) || defined(ARDUINO_UNOR4_WIFI)
@@ -150,6 +159,27 @@ void runCalibration(){
   Serial.print(F(" mvc="));  Serial.print(P.mvc);
   Serial.print(F(" tk="));   Serial.print(P.tkOnset);
   Serial.print(F(" floor="));Serial.println(P.fsrFloor);
+  saveParamsEEPROM();
+}
+
+/* ============================================================
+   EEPROM SAVE / LOAD
+   ============================================================ */
+void saveParamsEEPROM(){
+  EEPROM.put(EEPROM_ADDR, EEPROM_MAGIC);
+  EEPROM.put(EEPROM_ADDR + (int)sizeof(EEPROM_MAGIC), P);
+  Serial.println(F("EEPROM saved"));
+}
+
+void loadParamsEEPROM(){
+  uint8_t tag;
+  EEPROM.get(EEPROM_ADDR, tag);
+  if(tag == EEPROM_MAGIC){
+    EEPROM.get(EEPROM_ADDR + (int)sizeof(EEPROM_MAGIC), P);
+    Serial.println(F("EEPROM loaded"));
+  } else {
+    Serial.println(F("EEPROM empty, using defaults"));
+  }
 }
 
 /* ============================================================
@@ -165,6 +195,7 @@ void setup(){
   claw.attach(PIN_SERVO); claw.write(CLAW_OPEN); curAngle=CLAW_OPEN;
   delay(300);
   Serial.println(F("PREHEND ready. Send 'c' to calibrate, 'P' to force pre-position."));
+  loadParamsEEPROM();
 }
 
 /* ============================================================
@@ -254,11 +285,29 @@ void driveOutputs(){
    'c' -> calibrate ;  'P' -> force early PRE-POSITION (host BP tier)
    ============================================================ */
 void handleSerial(){
-  if(!Serial.available()) return;
-  char cmd = Serial.read();
-  if(cmd=='c'){
-    runCalibration();
-  } else if(cmd=='P'){
+  while(Serial.available()){
+    char ch = Serial.read();
+    if(ch=='\n' || ch=='\r'){
+      if(serialIdx==0) continue;              // ignore blank lines
+      serialBuf[serialIdx] = '\0';            // null-terminate
+      processSerialCmd(serialBuf);
+      serialIdx = 0;
+    } else {
+      if(serialIdx < sizeof(serialBuf)-1)
+        serialBuf[serialIdx++] = ch;
+    }
+  }
+}
+
+/* ---- process a complete serial command line ---- */
+void processSerialCmd(const char* buf){
+  char prefix = buf[0];
+  const char* val = buf+1;
+
+  if(prefix=='c' && buf[1]=='\0'){
+    runCalibration(); return;
+  }
+  if(prefix=='P' && buf[1]=='\0'){
     // host BP detector requests an early pre-position; EMG must still
     // confirm within tAbortMs or the cascade ABORTs (no grasp on BP alone)
     if(state==S_IDLE || state==S_ARMED){
@@ -266,6 +315,44 @@ void handleSerial(){
       tPreMs = millis();
       state = S_PREPOS; tStateMs = tPreMs;
     }
+    return;
+  }
+  if(prefix=='S' && buf[1]=='\0'){ saveParamsEEPROM(); return; }
+  if(prefix=='L' && buf[1]=='\0'){ loadParamsEEPROM(); return; }
+  if(prefix=='?' && buf[1]=='\0'){
+    Serial.println(F("--- Params ---"));
+    Serial.print(F("rmsCommit=")); Serial.println(P.rmsCommit,4);
+    Serial.print(F("slipTh="));    Serial.println(P.slipTh,2);
+    Serial.print(F("kSlip="));     Serial.println(P.kSlip,4);
+    Serial.print(F("tAbortMs="));  Serial.println(P.tAbortMs);
+    Serial.print(F("tHoldMs="));   Serial.println(P.tHoldMs);
+    Serial.print(F("extOpen="));   Serial.println(P.extOpen,4);
+    Serial.print(F("emgBase="));   Serial.println(P.emgBase,4);
+    Serial.print(F("mvc="));       Serial.println(P.mvc,4);
+    Serial.print(F("tkOnset="));   Serial.println(P.tkOnset,2);
+    Serial.print(F("fsrFloor="));  Serial.println(P.fsrFloor,2);
+    Serial.print(F("hrLo="));      Serial.println(P.hrLo);
+    Serial.print(F("hrHi="));      Serial.println(P.hrHi);
+    Serial.println(F("--------------"));
+    return;
+  }
+
+  /* runtime parameter tweak: letter + numeric value */
+  switch(prefix){
+    case 'r': P.rmsCommit = atof(val);
+              Serial.print(F("SET rmsCommit=")); Serial.println(P.rmsCommit,4); break;
+    case 's': P.slipTh = atof(val);
+              Serial.print(F("SET slipTh=")); Serial.println(P.slipTh,2); break;
+    case 'k': P.kSlip = atof(val);
+              Serial.print(F("SET kSlip=")); Serial.println(P.kSlip,4); break;
+    case 'a': P.tAbortMs = (uint16_t)atoi(val);
+              Serial.print(F("SET tAbortMs=")); Serial.println(P.tAbortMs); break;
+    case 'h': P.tHoldMs = (uint16_t)atoi(val);
+              Serial.print(F("SET tHoldMs=")); Serial.println(P.tHoldMs); break;
+    case 'e': P.extOpen = atof(val);
+              Serial.print(F("SET extOpen=")); Serial.println(P.extOpen,4); break;
+    default:
+              Serial.print(F("ERR unknown cmd: ")); Serial.println(buf); break;
   }
 }
 

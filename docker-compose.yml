@@ -1,0 +1,12 @@
+version: '3.8'
+
+services:
+  clinical_dashboard:
+    build:
+      context: .
+      dockerfile: host/Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./host/prehend_clinical.db:/app/prehend_clinical.db
+    restart: unless-stopped

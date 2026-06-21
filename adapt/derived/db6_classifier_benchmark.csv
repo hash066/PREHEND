@@ -1,0 +1,7 @@
+user_id,mode,channels,n_train_windows,intra_session_acc,inter_session_acc,n_test_intra,n_test_inter
+DB6_s1,baseline,1 (best),1469,0.8333,0.7315,12,108
+DB6_s1,upgrade,14 (all),1469,1.0,0.7222,12,108
+DB6_s2,baseline,1 (best),1416,0.9167,0.34,12,100
+DB6_s2,upgrade,14 (all),1416,1.0,0.45,12,100
+DB6_s3,baseline,1 (best),1458,0.9167,0.4074,12,108
+DB6_s3,upgrade,14 (all),1458,1.0,0.463,12,108

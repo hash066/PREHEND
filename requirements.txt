@@ -1,0 +1,14 @@
+# SIGNAL+ADAPT — host-side (ADAPT) layer dependencies.
+# The SIGNAL firmware itself needs only the Arduino `Servo` library; nothing here
+# runs in the real-time control path (patent disclosure Section 11-12).
+#
+# Install:  pip install -r requirements.txt
+lifelines>=0.27       # Cox proportional hazards (spec Section 8) — the ONLY hazard model
+wfdb>=4.1             # read GRABMyo WFDB .dat/.hea records (PhysioNet)
+scipy>=1.10           # signal filtering + scipy.io.loadmat for Ninapro DB6 .mat
+numpy>=1.24
+pandas>=1.5
+scikit-learn>=1.2     # LDA classifier used to derive the per-session Accuracy covariate
+pyserial>=3.5         # serial_bridge: telemetry parse + REMAP round-trip to firmware
+openai>=1.0           # report_generator: Nebius Token Factory (OpenAI-compatible client)
+pytest>=7.0

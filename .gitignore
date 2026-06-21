@@ -17,9 +17,27 @@ venv/
 # Captured telemetry logs
 prehend_*.csv
 
+# Real datasets (large; download via scripts/ — see docs/real_data_manifest.md)
+data/
+*.zip
+# but keep derived, committed covariate tables small enough to track
+!adapt/derived/
+
+# Pytest / tooling
+.pytest_cache/
+*.egg-info/
+
 # Editor / OS
 .vscode/
 .idea/
 *.swp
 .DS_Store
 Thumbs.db
+
+# Frontend node modules & build outputs
+frontend/node_modules/
+frontend/dist/
+
+# SQLite Database
+host/prehend_clinical.db
+
