@@ -7,7 +7,7 @@ const SPELLER_PHRASES = [
 ];
 
 const Caregiver = () => {
-  const { currentVitals, speakAnnouncement, addEventLog } = useTelemetry();
+  const { currentVitals, speakAnnouncement, addEventLog, lastGesture, systemMode, setSystemMode } = useTelemetry();
 
   // Speller State
   const [phrases, setPhrases] = useState(SPELLER_PHRASES);
@@ -15,6 +15,9 @@ const Caregiver = () => {
   const [selectedPhrase, setSelectedPhrase] = useState("");
   const [isSpellerEnabled, setIsSpellerEnabled] = useState(false);
   const lastStateRef = useRef(0);
+  const lastGestureTimeRef = useRef(0);
+  const scanIndexRef = useRef(0);
+  useEffect(() => { scanIndexRef.current = scanIndex; }, [scanIndex]);
 
   // Medications State
   const [meds, setMeds] = useState([]);
@@ -33,18 +36,34 @@ const Caregiver = () => {
     return () => clearInterval(interval);
   }, [isSpellerEnabled, phrases]);
 
-  // Telemetry Listener for Speller trigger: Trigger selection when FSM hits PREPOS (state 2)
+  const selectCurrentPhrase = (source) => {
+    const selected = phrases[scanIndexRef.current];
+    setSelectedPhrase(prev => prev ? prev + " " + selected : selected);
+    speakAnnouncement(selected);
+    addEventLog("AAC Selection", `Selected "${selected}" via ${source}`, "badge-grasp");
+  };
+
+  // Trigger 1: FSM PREPOS (flexor EMG burst) — legacy myoelectric path
   useEffect(() => {
     const currentState = currentVitals.state;
     if (isSpellerEnabled && currentState === 2 && lastStateRef.current !== 2) {
-      // Pick the currently scanned phrase
-      const selected = phrases[scanIndex];
-      setSelectedPhrase(prev => prev ? prev + " " + selected : selected);
-      speakAnnouncement(selected);
-      addEventLog("AAC Selection", `Patient selected phrase: "${selected}"`, "badge-grasp");
+      selectCurrentPhrase("EMG onset");
     }
     lastStateRef.current = currentState;
-  }, [currentVitals.state, isSpellerEnabled, scanIndex, phrases]);
+  }, [currentVitals.state, isSpellerEnabled, phrases]);
+
+  // Trigger 2: EOG long-blink or head NOD — the real AAC modalities (PREHEND-SPEAK)
+  useEffect(() => {
+    if (!isSpellerEnabled || !lastGesture) return;
+    if (lastGesture.time === lastGestureTimeRef.current) return;
+    const isSelect =
+      (lastGesture.kind === "eog" && lastGesture.label === "BLINK-LONG") ||
+      (lastGesture.kind === "imu" && lastGesture.label === "NOD");
+    if (isSelect) {
+      lastGestureTimeRef.current = lastGesture.time;
+      selectCurrentPhrase(lastGesture.label);
+    }
+  }, [lastGesture, isSpellerEnabled, phrases]);
 
   // Load Medications
   const loadMeds = () => {
@@ -93,7 +112,12 @@ const Caregiver = () => {
       
       {/* 1. Stephen Hawking AAC Scanning Speller */}
       <div className="card" style={{ gridColumn: "1 / -1" }}>
-        <div className="card-title">AAC Scanning Speller (Myoelectric Triggered via FSM Commit/Prepos)</div>
+        <div className="card-title">
+          <span>AAC Scanning Speller — Eye-Blink · Head-Nod · EMG triggered</span>
+          <span style={{ fontSize: "0.7rem", color: systemMode === 1 ? "var(--med-teal)" : "var(--text-muted)" }}>
+            {systemMode === 1 ? "● SPEAK mode (claw locked open)" : "Grasp mode"}
+          </span>
+        </div>
         <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
           <div className="speller-display">
             {selectedPhrase || "Select phrase..."}
@@ -108,16 +132,26 @@ const Caregiver = () => {
               </div>
             ))}
           </div>
-          <div style={{ marginTop: "12px", display: "flex", gap: "8px" }}>
-            <button 
-              className={isSpellerEnabled ? "btn-alert" : "btn-primary"} 
+          <div style={{ marginTop: "12px", display: "flex", gap: "8px", flexWrap: "wrap" }}>
+            <button
+              className={isSpellerEnabled ? "btn-alert" : "btn-primary"}
               onClick={() => setIsSpellerEnabled(!isSpellerEnabled)}
             >
               {isSpellerEnabled ? "Disable AAC Speller" : "Enable AAC Speller"}
             </button>
+            <button
+              style={{ borderColor: "var(--med-teal)", color: systemMode === 1 ? "white" : "var(--med-teal)", background: systemMode === 1 ? "var(--med-teal)" : "transparent" }}
+              onClick={() => setSystemMode(systemMode === 1 ? 0 : 1)}
+            >
+              {systemMode === 1 ? "Exit SPEAK mode" : "Enter SPEAK mode (lock claw)"}
+            </button>
             <button className="btn-alert" onClick={() => setSelectedPhrase("")}>
               Clear Phrase
             </button>
+          </div>
+          <div className="neuro-hint" style={{ marginTop: "4px" }}>
+            Selection fires on a sustained <strong>eye blink</strong>, a <strong>head nod</strong>,
+            or a flexor <strong>EMG burst</strong> — whichever residual movement the patient retains.
           </div>
         </div>
       </div>

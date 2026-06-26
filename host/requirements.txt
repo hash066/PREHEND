@@ -1,8 +1,12 @@
 # Host-side tools only — NOT required to build or run the device.
 pyserial>=3.5
-matplotlib>=3.7   # host_dashboard.py
-numpy>=1.24       # bp_trigger.py
+matplotlib>=3.7   # host_dashboard.py, eeg_viz.py
+numpy>=1.24       # bp_trigger.py, eeg_viz.py
 scipy>=1.10       # bp_trigger.py
+
+# PREHEND-SPEAK AAC keyboard
+pyttsx3>=2.90     # speak_aac.py — TTS voice synthesis (no network required)
+pygame>=2.5       # speak_aac.py — scanning keyboard UI
 
 # Backend Dependencies (FastAPI/Docker)
 fastapi>=0.100

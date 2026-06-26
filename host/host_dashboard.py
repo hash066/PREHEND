@@ -1,7 +1,9 @@
 """PREHEND live dashboard + CSV logger + automatic validation-plot capture.
 
 Reads the decimated telemetry stream from the Arduino (115200 baud,
-6 CSV fields: ms,emgNorm,tkeo,fsr,bpm,state) and:
+10 CSV fields: ms,emgNorm,tkeo,fsr,bpm,state,auxRaw,imuPacked,gestureByte,mode).
+Also accepts the legacy 6-field format for backward compatibility.
+
 
   * Plots EMG + FSR + state live (three subplots).
   * Logs every line to a timestamped CSV.
@@ -63,18 +65,44 @@ SLIP_DFDT_THRESH = -50  # FSR derivative spike threshold (units / sample)
 # ---------------------------------------------------------------------------
 # Telemetry sample
 # ---------------------------------------------------------------------------
+GESTURE_NAMES = {
+    # bits 3-0 = eogEvent
+    0x01: "BLINK-SHORT", 0x02: "BLINK-LONG", 0x03: "SACC-R", 0x04: "SACC-L",
+    # bits 5-4 = imuGesture (shifted)
+    0x10: "NOD", 0x20: "SHAKE", 0x30: "TILT",
+}
+
+MODE_NAMES = {0: "GRASP", 1: "SPEAK", 2: "EEG_STREAM"}
+
+
+def decode_gesture(gb: int) -> str:
+    eog = gb & 0x0F
+    imu = (gb >> 4) & 0x03
+    parts = []
+    if eog: parts.append(GESTURE_NAMES.get(eog, f"EOG:{eog}"))
+    if imu: parts.append(GESTURE_NAMES.get(imu << 4, f"IMU:{imu}"))
+    return "+".join(parts) if parts else ""
+
+
 class Sample:
-    """One telemetry row."""
-    __slots__ = ("ms", "emg", "tkeo", "fsr", "bpm", "state")
+    """One telemetry row (supports 6-field legacy and 10-field extended formats)."""
+    __slots__ = ("ms", "emg", "tkeo", "fsr", "bpm", "state",
+                 "aux_raw", "imu_packed", "gesture_byte", "mode")
 
     def __init__(self, ms: float, emg: float, tkeo: float, fsr: float,
-                 bpm: float, state: int):
+                 bpm: float, state: int,
+                 aux_raw: int = 0, imu_packed: int = 0,
+                 gesture_byte: int = 0, mode: int = 0):
         self.ms = ms
         self.emg = emg
         self.tkeo = tkeo
         self.fsr = fsr
         self.bpm = bpm
         self.state = state
+        self.aux_raw = aux_raw
+        self.imu_packed = imu_packed
+        self.gesture_byte = gesture_byte
+        self.mode = mode
 
 
 # ---------------------------------------------------------------------------
@@ -444,9 +472,12 @@ class LiveDisplay:
 
         state_name = STATE_NAMES.get(s.state, "?")
         elapsed = s.ms / 1000.0
+        gesture_str = decode_gesture(s.gesture_byte)
+        mode_str = MODE_NAMES.get(s.mode, f"M{s.mode}")
+        extra = f"  |  Gesture: {gesture_str}" if gesture_str else ""
         self.ax_emg.set_title(
-            f"PREHEND  |  State: {state_name} ({s.state})  |  "
-            f"BPM: {s.bpm:.0f}  |  Elapsed: {elapsed:.1f}s",
+            f"PREHEND [{mode_str}]  |  State: {state_name} ({s.state})  |  "
+            f"BPM: {s.bpm:.0f}  |  Elapsed: {elapsed:.1f}s{extra}",
             fontsize=10, fontweight="bold",
         )
 
@@ -509,7 +540,8 @@ def main() -> None:
     csv_path = f"prehend_{int(time.time())}.csv"
     csv_fh = open(csv_path, "w", newline="")
     csv_writer = csv.writer(csv_fh)
-    csv_writer.writerow(["ms", "emgNorm", "tkeo", "fsr", "bpm", "state"])
+    csv_writer.writerow(["ms", "emgNorm", "tkeo", "fsr", "bpm", "state",
+                         "auxRaw", "imuPacked", "gestureByte", "mode"])
     print(f"[INFO] Logging to {csv_path}")
 
     # --- Event store ---
@@ -550,28 +582,35 @@ def main() -> None:
                 continue
 
             parts = line.split(",")
-            if len(parts) != 6:
+            if len(parts) < 6:
                 continue
 
             try:
-                ms   = float(parts[0])
-                emg  = float(parts[1])
-                tkeo = float(parts[2])
-                fsr  = float(parts[3])
-                bpm  = float(parts[4])
+                ms    = float(parts[0])
+                emg   = float(parts[1])
+                tkeo  = float(parts[2])
+                fsr   = float(parts[3])
+                bpm   = float(parts[4])
                 state = int(parts[5])
+                # extended fields (firmware ≥ PREHEND-SPEAK)
+                aux_raw      = int(parts[6])  if len(parts) > 6 else 0
+                imu_packed   = int(parts[7])  if len(parts) > 7 else 0
+                gesture_byte = int(parts[8])  if len(parts) > 8 else 0
+                mode         = int(parts[9])  if len(parts) > 9 else 0
             except (ValueError, IndexError):
                 continue
 
-            # Log raw line
-            csv_writer.writerow(parts)
+            # Pad legacy rows to 10 fields for consistent CSV
+            while len(parts) < 10:
+                parts.append("0")
+            csv_writer.writerow(parts[:10])
             sample_count += 1
 
-            # Flush CSV every 100 samples to avoid data loss
             if sample_count % 100 == 0:
                 csv_fh.flush()
 
-            s = Sample(ms, emg, tkeo, fsr, bpm, state)
+            s = Sample(ms, emg, tkeo, fsr, bpm, state,
+                       aux_raw, imu_packed, gesture_byte, mode)
 
             # Event detection (runs even in no-plot mode)
             events.push(s)
