@@ -167,7 +167,6 @@ const Dashboard = () => {
         <div className="card">
           <div className="card-title">
             <span>Active Vitals</span>
-            <span className="pulse-heart">♥</span>
           </div>
           <div className="vitals-grid">
             <div className="vital-gauge vital-emg">

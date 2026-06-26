@@ -128,7 +128,7 @@ const Clinician = () => {
 
           {isLowSnr && (
             <div className="med-item overdue" style={{ borderLeft: "4px solid var(--med-red)", padding: "8px", fontSize: "0.8rem", fontWeight: "bold", animation: "pulse-bg 2s infinite" }}>
-              ⚠️ ELECTRODE SIGNAL DEGRADED: Clean flexor sensor site immediately.
+              ELECTRODE SIGNAL DEGRADED: Clean flexor sensor site immediately.
             </div>
           )}
 

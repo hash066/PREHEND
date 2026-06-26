@@ -7,10 +7,10 @@ import Clinician from './pages/Clinician';
 import NeuroLab from './pages/NeuroLab';
 
 const NAV_ITEMS = [
-  { to: "/", label: "Dashboard", icon: "📈", end: true, desc: "Telemetry & Calibration" },
-  { to: "/neuro", label: "Neuro Lab", icon: "🧠", desc: "Brainwaves · Gestures · AAC I/O" },
-  { to: "/caregiver", label: "Caregiver Suite", icon: "🗣️", desc: "AAC Speller · Meds · Geofence" },
-  { to: "/clinician", label: "Clinician Diagnostics", icon: "🩺", desc: "Prognostics · Sleep · PT" },
+  { to: "/", label: "Dashboard", end: true, desc: "Telemetry & Calibration" },
+  { to: "/neuro", label: "Neuro Lab", desc: "Brainwaves · Gestures · AAC I/O" },
+  { to: "/caregiver", label: "Caregiver Suite", desc: "AAC Speller · Meds · Geofence" },
+  { to: "/clinician", label: "Clinician Diagnostics", desc: "Prognostics · Sleep · PT" },
 ];
 
 // Mode switcher: GRASP / SPEAK / EEG_STREAM (sends M0/M1/M2 to device)
@@ -46,7 +46,7 @@ const Sidebar = () => {
   return (
     <aside className="app-sidebar">
       <div className="sidebar-brand">
-        <div className="hospital-logo">✚</div>
+        <div className="hospital-logo">+</div>
         <div>
           <h1>PREHEND</h1>
           <div className="patient-label">Clinical Workstation</div>
@@ -61,7 +61,6 @@ const Sidebar = () => {
             end={item.end}
             className={({ isActive }) => `sidebar-nav-item ${isActive ? "active" : ""}`}
           >
-            <span className="nav-icon">{item.icon}</span>
             <span className="nav-text">
               <span className="nav-label">{item.label}</span>
               <span className="nav-desc">{item.desc}</span>
