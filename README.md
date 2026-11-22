@@ -2,7 +2,7 @@
 
 **A single-channel EMG switch-access system (SIGNAL) with a survival-analytic command-channel
 prognostics layer (ADAPT) that forecasts when a control gesture will become unreliable and
-proactively migrates it — *before* the user loses the function.**
+proactively migrates it — *before* the user loses the function .**
 
 - **SIGNAL** — Arduino firmware (frozen, real-time). One EMG site → burst classifier
   (SHORT / LONG / DOUBLE) → servo switch-press actuator, 1 kHz loop.
